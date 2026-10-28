@@ -1,5 +1,7 @@
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 
+#include <algorithm>
+
 #include <stepit/policy_neuro/subscriber_action.h>
 #include <stepit/policy_neuro_ros2/heightmap_subscriber2.h>
 #include <stepit/ros2/node.h>
@@ -35,6 +37,10 @@ HeightmapSubscriber2::HeightmapSubscriber2(const NeuroPolicySpec &policy_spec, c
     uncertainty_scaling_ = 0.25F;
   }
   config_["elevation_zero_mean"].to(elevation_zero_mean_, true);
+  config_["elevation_nan_to_num"].to(elevation_nan_to_num_, true);
+  config_["elevation_nan_value"].to(elevation_nan_value_, true);
+  config_["elevation_clip_min"].to(elevation_clip_min_, true);
+  config_["elevation_clip_max"].to(elevation_clip_max_, true);
   config_["uncertainty_squared"].to(uncertainty_squared_, true);
   config_["uncertainty_scaling"].to(uncertainty_scaling_, true);
   std::string elevation_interp_method, uncertainty_interp_method;
@@ -135,20 +141,32 @@ bool HeightmapSubscriber2::update(const LowState &low_state, ControlRequests &re
                     uncertainty_[static_cast<Eigen::Index>(i)]);
     }
   }
-  int num_finite = 0;
-  double sum     = 0.0;
-  for (std::size_t i{}; i < numHeightSamples(); ++i) {
-    float elevation = elevation_[static_cast<Eigen::Index>(i)];
-    if (std::isfinite(elevation)) {
-      num_finite++;
+  double sum = 0.0;
+  float mean = 0.0F;
+  if (elevation_nan_to_num_) {
+    for (std::size_t i{}; i < numHeightSamples(); ++i) {
+      float &elevation = elevation_[static_cast<Eigen::Index>(i)];
+      elevation        = std::clamp(elevation, elevation_clip_min_, elevation_clip_max_);
+      if (not std::isfinite(elevation)) elevation = elevation_nan_value_;
       sum += elevation;
     }
-  }
-  float mean = num_finite ? static_cast<float>(sum / num_finite) : 0.0F;
-  for (std::size_t i{}; i < numHeightSamples(); ++i) {
-    // Fill in NaN values with mean and set uncertainty to max_uncertainty_
-    float &elevation = elevation_[static_cast<Eigen::Index>(i)];
-    if (not std::isfinite(elevation)) elevation = mean;
+    mean = static_cast<float>(sum / numHeightSamples());
+  } else {
+    int num_finite = 0;
+    for (std::size_t i{}; i < numHeightSamples(); ++i) {
+      float &elevation = elevation_[static_cast<Eigen::Index>(i)];
+      if (std::isfinite(elevation)) {
+        elevation = std::clamp(elevation, elevation_clip_min_, elevation_clip_max_);
+        num_finite++;
+        sum += elevation;
+      }
+    }
+    mean = num_finite ? static_cast<float>(sum / num_finite) : 0.0F;
+    for (std::size_t i{}; i < numHeightSamples(); ++i) {
+      // Preserve the legacy subscriber behavior for policies that do not opt into nan_to_num.
+      float &elevation = elevation_[static_cast<Eigen::Index>(i)];
+      if (not std::isfinite(elevation)) elevation = mean;
+    }
   }
   if (elevation_zero_mean_) {
     elevation_ -= mean;

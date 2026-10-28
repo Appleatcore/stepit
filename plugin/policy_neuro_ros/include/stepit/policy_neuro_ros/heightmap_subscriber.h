@@ -9,6 +9,8 @@
 #include <tf2_ros/transform_listener.h>
 #include <topic_tools/shape_shifter.h>
 
+#include <limits>
+
 #include <stepit/joystick/joystick.h>
 #include <stepit/policy_neuro/heightmap_source.h>
 #include <stepit/ros/node_handle.h>
@@ -44,6 +46,10 @@ class HeightmapSubscriber : public DummyHeightmapSource {
   std::string elevation_layer_{"elevation"};
   std::string uncertainty_layer_{"uncertainty_range"};
   bool elevation_zero_mean_{true};
+  bool elevation_nan_to_num_{false};
+  float elevation_nan_value_{0.0F};
+  float elevation_clip_min_{-std::numeric_limits<float>::infinity()};
+  float elevation_clip_max_{std::numeric_limits<float>::infinity()};
   bool uncertainty_squared_{false};
   float uncertainty_scaling_{0.25F};
   InterpolationMethods elevation_interp_method_{InterpolationMethods::INTER_NEAREST};

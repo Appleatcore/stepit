@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>StepIt 雷达高程图插件设计说明</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --ink: #1f2328;
+      --muted: #5e636e;
+      --line: #d7cfbf;
+      --accent: #7c4f2f;
+      --accent-soft: #efe2d2;
+      --code: #f6efe5;
+      --ok: #2d6a4f;
+      --warn: #9c5322;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(124, 79, 47, 0.10), transparent 28%),
+        linear-gradient(180deg, #f8f4ed 0%, var(--bg) 100%);
+      line-height: 1.7;
+    }
+    .wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+    }
+    .hero {
+      background: linear-gradient(135deg, #2f3b3d 0%, #4f5e5d 55%, #7c4f2f 100%);
+      color: #fffdf8;
+      border-radius: 28px;
+      padding: 36px 34px;
+      box-shadow: 0 20px 50px rgba(31, 35, 40, 0.16);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -60px -60px auto;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    h1, h2, h3 {
+      line-height: 1.25;
+      margin: 0 0 14px;
+    }
+    h1 { font-size: 34px; letter-spacing: 0.02em; }
+    h2 {
+      font-size: 24px;
+      margin-top: 34px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    h3 {
+      font-size: 18px;
+      margin-top: 24px;
+      color: var(--accent);
+    }
+    p, li { font-size: 15px; }
+    .lead {
+      font-size: 17px;
+      max-width: 860px;
+      color: rgba(255, 253, 248, 0.92);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 18px;
+      margin-top: 22px;
+    }
+    .card {
+      grid-column: span 12;
+      background: var(--panel);
+      border: 1px solid rgba(124, 79, 47, 0.12);
+      border-radius: 22px;
+      padding: 24px 24px 26px;
+      box-shadow: 0 10px 30px rgba(61, 53, 39, 0.06);
+    }
+    .split-6 { grid-column: span 6; }
+    .split-4 { grid-column: span 4; }
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin-bottom: 12px;
+    }
+    .callout {
+      margin: 18px 0;
+      padding: 14px 16px;
+      border-left: 4px solid var(--accent);
+      background: #fbf6ef;
+      border-radius: 10px;
+    }
+    .callout.ok {
+      border-left-color: var(--ok);
+      background: #eef8f1;
+    }
+    .callout.warn {
+      border-left-color: var(--warn);
+      background: #fff3ea;
+    }
+    code, pre {
+      font-family: "JetBrains Mono", "Fira Code", "SFMono-Regular", Consolas, monospace;
+    }
+    code {
+      background: var(--code);
+      padding: 0.18em 0.42em;
+      border-radius: 6px;
+      font-size: 0.94em;
+    }
+    pre {
+      margin: 14px 0;
+      padding: 16px 18px;
+      background: #231f1a;
+      color: #f8f4ed;
+      border-radius: 16px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    ul, ol {
+      margin: 10px 0 0 20px;
+      padding: 0;
+    }
+    .path {
+      font-size: 13px;
+      color: var(--muted);
+      word-break: break-all;
+    }
+    .flow {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .flow div {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #fffdf9 0%, #f8f0e5 100%);
+      border: 1px solid #e5d7c5;
+    }
+    .mono-list li {
+      font-family: "JetBrains Mono", "Fira Code", monospace;
+      font-size: 13px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+      font-size: 14px;
+      background: #fffdfa;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid #eadfce;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f8efe2;
+      color: #503625;
+    }
+    tr:last-child td { border-bottom: none; }
+    .footer {
+      margin-top: 34px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    @media (max-width: 900px) {
+      .split-6, .split-4 { grid-column: span 12; }
+      .hero { padding: 28px 22px; }
+      h1 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="pill">STEPIT / HEIGHTMAP / RADAR</div>
+      <h1>StepIt 中“雷达高程图插件”的实际设计方法</h1>
+      <p class="lead">
+        这份文档基于当前仓库源码梳理 StepIt 高程图模块的真实结构。核心结论先说在前面：
+        <strong>StepIt 本身不负责把雷达点云直接建成高程图</strong>；
+        它做的是<strong>订阅外部已经生成好的 GridMap 高程图</strong>，
+        再结合机器人位姿或 TF 中的 <code>radar</code> 坐标系，
+        从地图中采样出固定布局的高度数组，送入策略网络的 <code>heightmap</code> 输入。
+      </p>
+    </section>
+
+    <div class="grid">
+      <section class="card split-6">
+        <h2>1. 职责边界</h2>
+        <div class="callout warn">
+          如果你现在理解成“StepIt 插件从毫米波雷达原始数据直接生成 elevation map”，这个理解是不准确的。
+        </div>
+        <p>在当前仓库中，高程图链条分成两层：</p>
+        <ol>
+          <li>外部地图模块负责把雷达/传感器数据融合成 <code>grid_map_msgs/msg/GridMap</code>。</li>
+          <li>StepIt 的 <code>heightmap_subscriber</code> / <code>heightmap_subscriber2</code> 负责订阅地图、采样、整理成策略输入。</li>
+        </ol>
+        <p>也就是说，<code>radar</code> 在 StepIt 侧主要扮演的是<strong>采样参考坐标系</strong>，不是点云建图器。</p>
+      </section>
+
+      <section class="card split-6">
+        <h2>2. 关键源码位置</h2>
+        <ul class="mono-list">
+          <li>plugin/policy_neuro/src/heightmap_source.cpp</li>
+          <li>plugin/policy_neuro/include/stepit/policy_neuro/heightmap_source.h</li>
+          <li>plugin/policy_neuro_ros2/src/heightmap_subscriber2.cpp</li>
+          <li>plugin/policy_neuro_ros2/include/stepit/policy_neuro_ros2/heightmap_subscriber2.h</li>
+          <li>plugin/policy_neuro_ros2/template/heightmap.yml</li>
+          <li>plugin/policy_neuro_ros2/README.md</li>
+          <li>plugin/policy_neuro/src/neuro_policy.cpp</li>
+          <li>policy/go2w_policy_cusrl_with_sensor_normal/heightmap.yml</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>3. 总体数据流</h2>
+        <div class="flow">
+          <div><strong>上游传感器系统</strong>：雷达/其他感知源生成 <code>/elevation_map</code>，消息类型是 <code>grid_map_msgs/msg/GridMap</code>。</div>
+          <div><strong>StepIt ROS2 插件</strong>：<code>heightmap_subscriber2</code> 订阅该地图。</div>
+          <div><strong>位姿来源</strong>：通过 <code>robot_frame_id: "radar"</code> 从 TF 查询雷达位姿，或者从 <code>/odometry</code>、<code>PoseStamped</code> 这类定位话题订阅。</div>
+          <div><strong>局部采样</strong>：在机器人附近的固定采样网格上读取 elevation 和 uncertainty。</div>
+          <div><strong>结果整理</strong>：得到固定长度的 <code>heightmap</code> 向量，例如你的 Go2W 配置里是 <code>187</code> 维。</div>
+          <div><strong>送入策略</strong>：网络输入定义见 <code>actor.yml</code>，高程图会和本体观测、速度命令、上一时刻动作拼接。</div>
+        </div>
+      </section>
+
+      <section class="card split-6">
+        <h2>4. 基类设计：先定义采样网格</h2>
+        <p>真正的 ROS2 订阅器不是从零写起，而是继承基础类 <code>DummyHeightmapSource</code>。</p>
+        <p class="path">源码：plugin/policy_neuro/src/heightmap_source.cpp</p>
+        <p>这个基类先解决两件事：</p>
+        <ol>
+          <li>定义采样点布局：可以用 <code>dimension + grid_size + x_major</code> 自动生成规则网格，也可以显式给 <code>sample_coords</code>。</li>
+          <li>注册输出字段：<code>heightmap</code> 和 <code>heightmap_uncertainty</code>。</li>
+        </ol>
+        <pre>dimension: [17, 11]
+grid_size: [0.1, 0.1]
+x_major: false</pre>
+        <p>这表示采样窗口宽度是 <code>17 x 11</code> 个采样点，每格 <code>0.1m</code>，总共 <code>187</code> 个采样值。</p>
+      </section>
+
+      <section class="card split-6">
+        <h2>5. ROS2 插件做了什么</h2>
+        <p class="path">源码：plugin/policy_neuro_ros2/src/heightmap_subscriber2.cpp</p>
+        <ol>
+          <li>读取 <code>heightmap.yml</code> 里的地图话题、定位方式、插值方式、超时阈值。</li>
+          <li>订阅 <code>GridMap</code>。</li>
+          <li>如果配置了 <code>robot_frame_id</code>，则通过 TF 查询这个坐标系在地图坐标系中的位姿。</li>
+          <li>否则订阅显式定位话题，如 <code>/odometry</code>。</li>
+          <li>每个控制周期根据位姿把局部采样网格旋转、平移到全局地图中，再逐点采样。</li>
+          <li>必要时把采样点再发布成调试点云 <code>heightmap_samples</code>。</li>
+        </ol>
+      </section>
+
+      <section class="card">
+        <h2>6. “radar” 在这里到底是什么意思</h2>
+        <div class="callout ok">
+          在你当前的策略配置里，<code>localization_subscriber.robot_frame_id: "radar"</code> 的含义是：
+          <strong>从 TF 中查找 radar 坐标系在地图坐标系下的位置和朝向，并以它为中心做高程采样。</strong>
+        </div>
+        <p>这带来的直接效果是：</p>
+        <ul>
+          <li>采样中心不是机器人 base，而是雷达安装坐标系。</li>
+          <li>如果雷达的安装位姿与机体中心有偏移，采样网格就会跟着偏移。</li>
+          <li>如果 <code>radar</code> 朝向与底盘朝向不同，采样网格也会按 <code>radar</code> 朝向旋转。</li>
+        </ul>
+        <p>因此，<code>radar</code> 更准确的说法应是“采样参考帧”，而不是“雷达建图插件”。</p>
+      </section>
+
+      <section class="card split-6">
+        <h2>7. 运行期判定逻辑</h2>
+        <p>插件不会盲目输出数据，而是先做就绪检查：</p>
+        <ol>
+          <li>订阅器是否启用。</li>
+          <li>是否收到了高程图。</li>
+          <li>TF 或定位消息是否可用。</li>
+          <li>高程图和定位是否超时。</li>
+          <li>地图中是否存在 <code>elevation</code> 层和配置的 <code>uncertainty</code> 层。</li>
+        </ol>
+        <p>如果检查失败，插件不会报错退出策略，而是回退成安全输出：</p>
+        <pre>elevation_.setZero();
+uncertainty_.setConstant(max_uncertainty_);</pre>
+        <p>也就是输出零高程图和最大不确定度。</p>
+      </section>
+
+      <section class="card split-6">
+        <h2>8. 采样算法细节</h2>
+        <p>每个控制周期，采样逻辑是：</p>
+        <ol>
+          <li>取雷达/定位位姿的二维位置 <code>(x, y)</code> 和偏航角。</li>
+          <li>将局部采样网格中的每个 <code>local_coord</code> 旋转到全局。</li>
+          <li>用 <code>grid_map::atPosition()</code> 从高程图指定 layer 插值得到高度。</li>
+          <li>再从 uncertainty layer 读取不确定度。</li>
+          <li>采样越界或非有限值时，记为 NaN，后续回填。</li>
+        </ol>
+        <p>代码中的局部到全局变换可以概括成：</p>
+        <pre>global_coord = robot_pos + yaw_rotation * local_coord</pre>
+      </section>
+
+      <section class="card">
+        <h2>9. NaN、均值与不确定度处理</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>场景</th>
+              <th>处理方式</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>高度采样越界或异常</td>
+              <td>先写成 NaN，后续用当前采样窗口内的均值回填。</td>
+            </tr>
+            <tr>
+              <td>高度 NaN 回填后</td>
+              <td>对应不确定度使用 <code>max_uncertainty</code> 语义保守处理。</td>
+            </tr>
+            <tr>
+              <td><code>elevation_zero_mean: true</code></td>
+              <td>将所有采样点减去均值，只保留相对起伏。</td>
+            </tr>
+            <tr>
+              <td><code>uncertainty_layer == variance</code></td>
+              <td>先开方，再乘 <code>uncertainty_scaling</code>。</td>
+            </tr>
+            <tr>
+              <td>没有 uncertainty layer</td>
+              <td>直接使用 <code>default_uncertainty</code>。</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>你当前的 Go2W 配置里用的是：</p>
+        <pre>elevation_zero_mean: false
+uncertainty_layer: "uncertainty"
+uncertainty_squared: false
+uncertainty_scaling: 0.25</pre>
+        <p>这意味着你保留了绝对高程趋势，而不是只保留相对高度起伏。</p>
+      </section>
+
+      <section class="card split-6">
+        <h2>10. 调试发布器</h2>
+        <p>如果开启 <code>height_sample_publisher</code>，插件会把采样点重新发布成 <code>PointCloud2</code>：</p>
+        <ul>
+          <li><code>x, y, z</code>：采样点全局位置和采样后的高度。</li>
+          <li><code>rgb</code>：用红绿颜色编码不确定度，越红表示不确定度越高。</li>
+        </ul>
+        <p>这非常适合拿 RViz 直接看“策略到底看到了哪里”。</p>
+      </section>
+
+      <section class="card split-6">
+        <h2>11. 为什么策略会自动拿到高程图</h2>
+        <p>在 StepIt 的神经策略里，模块和字段源是自动解析的。</p>
+        <p class="path">源码：plugin/policy_neuro/src/neuro_policy.cpp</p>
+        <p>只要网络输入要求 <code>heightmap</code>，StepIt 就会去找哪个模块能提供它：</p>
+        <ul>
+          <li><code>dummy_heightmap_source</code> 是低优先级兜底实现。</li>
+          <li><code>heightmap_subscriber</code> / <code>heightmap_subscriber2</code> 是高优先级真实实现。</li>
+        </ul>
+        <p>所以在 ROS2 插件正常加载时，如果你的策略需要 <code>heightmap</code>，通常会优先用真实订阅器。</p>
+      </section>
+
+      <section class="card">
+        <h2>12. 你当前 Go2W 配置的实际含义</h2>
+        <p>以当前策略目录 <code>policy/go2w_policy_cusrl_with_sensor_normal/</code> 为例：</p>
+        <table>
+          <thead>
+            <tr>
+              <th>文件</th>
+              <th>作用</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>heightmap.yml</code></td>
+              <td>定义采样窗口为 <code>17 x 11 = 187</code>，订阅 <code>/elevation_map</code>，使用 <code>radar</code> 作为 TF 参考帧。</td>
+            </tr>
+            <tr>
+              <td><code>actor.yml</code></td>
+              <td>要求网络输入包含 <code>heightmap: 187</code>，与本体观测拼接成总观测。</td>
+            </tr>
+            <tr>
+              <td><code>field_ops.yml</code></td>
+              <td>在送入网络前，对高程图做 <code>scale: -1.0</code> 和 <code>bias: -0.15</code> 的语义变换。</td>
+            </tr>
+            <tr>
+              <td><code>policy.yml</code></td>
+              <td>模块显式写了 <code>cmd_vel_source</code>、<code>field_ops</code>、<code>actor</code>；而 <code>heightmap</code> 会在依赖解析阶段自动补齐。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>13. 典型使用方法</h2>
+        <h3>13.1 构建依赖</h3>
+        <p>ROS2 插件需要这些依赖：</p>
+        <pre>sudo apt install ros-${ROS_DISTRO}-cv-bridge ros-${ROS_DISTRO}-grid-map-ros</pre>
+        <p>源码里还显式依赖：</p>
+        <pre>geometry_msgs
+grid_map_msgs
+grid_map_ros
+nav_msgs
+sensor_msgs
+std_msgs
+tf2_ros</pre>
+
+        <h3>13.2 准备上游话题</h3>
+        <ol>
+          <li>准备一个发布 <code>grid_map_msgs/msg/GridMap</code> 的节点，话题名通常是 <code>/elevation_map</code>。</li>
+          <li>确保地图里至少有 <code>elevation</code> 层。</li>
+          <li>如果你启用了不确定度，还要有 <code>uncertainty</code> 或 <code>variance</code> 层。</li>
+        </ol>
+
+        <h3>13.3 准备定位或 TF</h3>
+        <ol>
+          <li>推荐方式：发布 TF，使地图坐标系下可以查到 <code>radar</code>。</li>
+          <li>备用方式：在 <code>localization_subscriber</code> 中配置 <code>/odometry</code> 等定位话题。</li>
+        </ol>
+
+        <h3>13.4 准备策略配置</h3>
+        <pre>dimension: [17, 11]
+grid_size: [0.1, 0.1]
+x_major: false
+
+grid_map_subscriber:
+  topic: "/elevation_map"
+  default_enabled: true
+
+localization_subscriber:
+  robot_frame_id: "radar"</pre>
+
+        <h3>13.5 保证网络输入匹配</h3>
+        <pre>input_fields:
+  observation:
+  - { name: ang_vel, size: 3 }
+  - { name: gravity, size: 3 }
+  - { name: cmd_vel, size: 3 }
+  - { name: joint_pos, size: 16 }
+  - { name: joint_vel, size: 16 }
+  - { name: last_action, size: 16 }
+  - { name: heightmap, size: 187 }</pre>
+      </section>
+
+      <section class="card split-6">
+        <h2>14. 常见误区</h2>
+        <div class="callout warn">
+          误区 1：把 <code>radar</code> 理解成“雷达原始数据入口”。<br />
+          实际上它只是 TF 参考帧。
+        </div>
+        <div class="callout warn">
+          误区 2：以为 StepIt 会自动做 elevation mapping。<br />
+          实际上 StepIt 只消费地图，不负责地图生成。
+        </div>
+        <div class="callout warn">
+          误区 3：只改了 <code>heightmap.yml</code>，没改网络输入维度。<br />
+          采样点总数必须和网络要求一致。
+        </div>
+      </section>
+
+      <section class="card split-6">
+        <h2>15. 常见排查点</h2>
+        <ol>
+          <li>插件没加载：通常是 ROS2 依赖没装全，特别是 <code>grid_map_msgs</code>、<code>grid_map_ros</code>、<code>tf2_ros</code>。</li>
+          <li>看不到高程图：检查 <code>/elevation_map</code> 是否真在发 <code>GridMap</code>。</li>
+          <li>输出一直是零：通常是订阅器未启用、地图没到、TF 断了，或者超时后回退到 dummy 行为。</li>
+          <li>方向错位：优先检查 <code>robot_frame_id</code> 是否应该是 <code>radar</code> 还是 <code>base_link</code>。</li>
+          <li>网络效果差：确认 <code>x_major</code>、<code>elevation_zero_mean</code>、<code>field_ops.yml</code> 中的 <code>heightmap</code> 仿射变换与训练保持一致。</li>
+        </ol>
+      </section>
+
+      <section class="card">
+        <h2>16. 结论</h2>
+        <p>如果用一句话概括当前 StepIt 的设计：</p>
+        <div class="callout ok">
+          <strong>StepIt 的“高程图插件”是一个高程图订阅与局部采样插件，不是雷达建图插件。</strong>
+        </div>
+        <p>对你现在这套 Go2W 配置来说，正确理解应该是：</p>
+        <ol>
+          <li>外部系统先把雷达感知结果融合成 <code>/elevation_map</code>。</li>
+          <li>StepIt 用 <code>radar</code> 坐标系在这张地图上采样出 <code>187</code> 维局部高度向量。</li>
+          <li>再经过 <code>field_ops.yml</code> 的固定语义变换后，送入策略网络。</li>
+        </ol>
+      </section>
+    </div>
+
+    <div class="footer">
+      文档生成位置：<code>stepit/doc/stepit_heightmap_radar_plugin_guide.html</code><br />
+      依据源码目录：<code>/home/applepie/project_for_test/go2w_cusrl_demo/stepit</code>
+    </div>
+  </div>
+</body>
+</html>
